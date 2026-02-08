@@ -5,10 +5,22 @@ import { Concert } from "@/lib/types";
 import ConcertCard from "./ConcertCard";
 import FilterBar, { PriceFilter } from "./FilterBar";
 
+function etDateKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  // Format as YYYY-MM-DD in ET, not UTC
+  const parts = d.toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).split("/"); // MM/DD/YYYY
+  return `${parts[2]}-${parts[0]}-${parts[1]}`;
+}
+
 function groupByDate(concerts: Concert[]): Map<string, Concert[]> {
   const groups = new Map<string, Concert[]>();
   for (const concert of concerts) {
-    const dateKey = concert.date.split("T")[0];
+    const dateKey = etDateKey(concert.date);
     const existing = groups.get(dateKey) || [];
     existing.push(concert);
     groups.set(dateKey, existing);
