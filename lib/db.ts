@@ -81,3 +81,14 @@ export async function deleteOldConcerts(): Promise<void> {
     throw new Error(`Failed to delete old concerts: ${error.message}`);
   }
 }
+
+export async function deleteAllConcerts(): Promise<void> {
+  const { error } = await getSupabase()
+    .from("concerts")
+    .delete()
+    .gte("id", "00000000-0000-0000-0000-000000000000");
+
+  if (error) {
+    throw new Error(`Failed to delete all concerts: ${error.message}`);
+  }
+}

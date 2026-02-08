@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { sources } from "@/lib/sources";
 import { extractConcerts } from "@/lib/claude";
 import { deduplicateConcerts } from "@/lib/dedup";
-import { upsertConcerts, deleteOldConcerts } from "@/lib/db";
+import { upsertConcerts, deleteAllConcerts } from "@/lib/db";
 import { enrichPrices } from "@/lib/enrich-prices";
 
 export const maxDuration = 60; // Allow up to 60s for the cron job
@@ -74,8 +74,8 @@ export async function GET(request: Request) {
 
   // Write to database
   try {
+    await deleteAllConcerts();
     await upsertConcerts(dedupedConcerts);
-    await deleteOldConcerts();
     console.log("Successfully wrote concerts to database");
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);

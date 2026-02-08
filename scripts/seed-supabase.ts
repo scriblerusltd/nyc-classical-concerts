@@ -7,10 +7,12 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 async function main() {
-  const { upsertConcerts } = await import("../lib/db");
+  const { upsertConcerts, deleteAllConcerts } = await import("../lib/db");
   const { readFileSync } = await import("fs");
 
   const data = JSON.parse(readFileSync("test-output.json", "utf-8"));
+  console.log(`Clearing old data...`);
+  await deleteAllConcerts();
   console.log(`Seeding ${data.length} concerts to Supabase...`);
 
   // Upsert in batches of 50
