@@ -8,6 +8,15 @@ function normalize(str: string): string {
     .trim();
 }
 
+// All events are in NYC. Normalize dates to naive local time
+// by stripping timezone suffixes (Z, -05:00, -04:00).
+// This ensures consistent rendering regardless of server timezone.
+function normalizeDate(dateStr: string): string {
+  return dateStr
+    .replace(/Z$/, "")
+    .replace(/[+-]\d{2}:\d{2}$/, "");
+}
+
 // Generate all possible dedup keys for a concert (venue:date:identifier)
 function dedupKeys(concert: ExtractedConcert | Concert): string[] {
   const venue = normalizeVenue(concert.venue);
@@ -101,6 +110,17 @@ function isSameEvent(concert1: ExtractedConcert | ExtractedWithSource, concert2:
     const overlap = [...words1].filter((w) => words2.has(w)).length;
     const smaller = Math.min(words1.size, words2.size);
     if (overlap >= 2 && overlap / smaller >= 0.5) return true;
+  }
+
+  // Check if a distinctive word (5+ chars) from one title appears in the other
+  // Handles cases like "AXIOM" vs "The New Series | AXIOM: Kurtág @ 100"
+  const distinctive1 = [...words1].filter((w) => w.length >= 5);
+  const distinctive2 = [...words2].filter((w) => w.length >= 5);
+  for (const w of distinctive1) {
+    if (words2.has(w)) return true;
+  }
+  for (const w of distinctive2) {
+    if (words1.has(w)) return true;
   }
 
   return false;
@@ -260,7 +280,7 @@ export function deduplicateConcerts(
   return Array.from(canonicalToEntry.values()).map((c) => ({
     id: randomUUID(),
     title: c.title,
-    date: c.date,
+    date: normalizeDate(c.date),
     venue: c.venue,
     address: c.address,
     price: c.price,

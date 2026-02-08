@@ -51,10 +51,17 @@ export async function extractConcerts(
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
 
-  // Parse the JSON response — handle potential markdown code blocks
+  // Parse the JSON response — handle markdown code blocks and prose preamble
   let jsonStr = text.trim();
   if (jsonStr.startsWith("```")) {
     jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  }
+
+  // If Claude included prose before the JSON, find the JSON array
+  const arrayStart = jsonStr.indexOf("[");
+  const arrayEnd = jsonStr.lastIndexOf("]");
+  if (arrayStart > 0 && arrayEnd > arrayStart) {
+    jsonStr = jsonStr.slice(arrayStart, arrayEnd + 1);
   }
 
   try {

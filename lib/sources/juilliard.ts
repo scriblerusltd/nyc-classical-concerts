@@ -62,9 +62,14 @@ async function directExtract(): Promise<ExtractedConcert[]> {
     const tags = mapTags(e.tags || "");
     const isFree = (e.tags || "").toLowerCase().includes("free");
 
+    // Juilcal stores times in UTC but they're actually ET local times.
+    // Strip the Z suffix so they're treated as naive local times,
+    // consistent with NYCR and Kaufman.
+    const date = e.dateTime.replace(/Z$/, "");
+
     return {
       title: e.title,
-      date: e.dateTime,
+      date,
       venue: e.venue || "Juilliard School",
       address: "60 Lincoln Center Plaza, New York, NY 10023",
       price: isFree ? "Free" : "See website",

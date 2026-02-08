@@ -7,11 +7,15 @@ import { Source } from "../types";
 //   <strong class="cat-mch">11 am</strong>
 //   <span>Event Title</span>
 // </a>
+//
+// NOTE: Kaufman's calendar sometimes shows the same events on multiple months
+// with identical URLs. We deduplicate by URL to avoid ghost duplicates.
 
 const SOURCE_URL = "https://www.kaufmanmusiccenter.org/mch/calendar/";
 
 async function fetchAndClean(): Promise<string> {
   const pages: string[] = [];
+  const seenUrls = new Set<string>();
 
   for (let monthOffset = 0; monthOffset < 2; monthOffset++) {
     const date = new Date();
@@ -59,6 +63,10 @@ async function fetchAndClean(): Promise<string> {
           const time = $entry.find("strong").text().trim();
           const title = $entry.find("span").text().trim();
           const href = $entry.attr("href") || "";
+
+          // Skip if we already saw this URL (Kaufman bug: same events on multiple months)
+          if (href && seenUrls.has(href)) return;
+          if (href) seenUrls.add(href);
 
           if (title) {
             events.push(
