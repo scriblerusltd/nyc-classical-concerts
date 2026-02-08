@@ -1,14 +1,15 @@
 import { Concert } from "@/lib/types";
 
+const TZ = "America/New_York";
+
 function formatDate(dateStr: string): { dayOfWeek: string; monthDay: string; time: string | null } {
   const date = new Date(dateStr);
-  const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
-  const monthDay = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
+  const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "short", timeZone: TZ }).toUpperCase();
+  const monthDay = date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: TZ });
 
-  // If time is midnight (00:00), assume time wasn't provided
-  if (hours === 0 && minutes === 0) {
+  // Check if time is midnight in ET (assume time wasn't provided)
+  const hourStr = date.toLocaleTimeString("en-US", { hour: "numeric", hour12: false, timeZone: TZ });
+  if (hourStr === "0" || hourStr === "00" || hourStr === "24") {
     return { dayOfWeek, monthDay, time: null };
   }
 
@@ -16,6 +17,7 @@ function formatDate(dateStr: string): { dayOfWeek: string; monthDay: string; tim
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: TZ,
   });
 
   return { dayOfWeek, monthDay, time };

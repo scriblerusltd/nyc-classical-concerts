@@ -17,25 +17,23 @@ function groupByDate(concerts: Concert[]): Map<string, Concert[]> {
 }
 
 function formatGroupDate(dateStr: string): string {
-  const date = new Date(dateStr + "T12:00:00");
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Use noon ET to avoid any date-boundary issues
+  const date = new Date(dateStr + "T12:00:00-05:00");
+  const now = new Date();
+  const todayStr = now.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
+  const tomorrowDate = new Date(now.getTime() + 86400000);
+  const tomorrowStr = tomorrowDate.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
 
-  const dateNoon = new Date(dateStr + "T12:00:00");
+  const dateFormatted = date.toLocaleDateString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
 
-  if (dateNoon.toDateString() === today.toDateString()) {
-    return "Today";
-  }
-  if (dateNoon.toDateString() === tomorrow.toDateString()) {
-    return "Tomorrow";
-  }
+  if (dateFormatted === todayStr) return "Today";
+  if (dateFormatted === tomorrowStr) return "Tomorrow";
 
   return date.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone: "America/New_York",
   });
 }
 

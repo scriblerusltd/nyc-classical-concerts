@@ -8,13 +8,43 @@ function normalize(str: string): string {
     .trim();
 }
 
-// All events are in NYC. Normalize dates to naive local time
-// by stripping timezone suffixes (Z, -05:00, -04:00).
-// This ensures consistent rendering regardless of server timezone.
+// All events are in NYC. Ensure dates always have the correct ET offset
+// so new Date() parses them correctly in any environment (Node.js SSR, browser).
+// Without an offset, Node.js treats "2026-02-10T14:00:00" as UTC → shows 9am ET.
 function normalizeDate(dateStr: string): string {
-  return dateStr
+  // Strip any existing timezone info to get naive local time
+  const naive = dateStr
     .replace(/Z$/, "")
     .replace(/[+-]\d{2}:\d{2}$/, "");
+
+  // Determine if the date falls in EDT (March second Sunday to November first Sunday)
+  const offset = isEDT(naive) ? "-04:00" : "-05:00";
+  return naive + offset;
+}
+
+function isEDT(dateStr: string): boolean {
+  // Parse just the date portion
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return false;
+
+  const year = parseInt(match[1]);
+  const month = parseInt(match[2]);
+  const day = parseInt(match[3]);
+
+  if (month < 3 || month > 11) return false; // Jan, Feb, Dec → EST
+  if (month > 3 && month < 11) return true;   // Apr–Oct → EDT
+
+  // March: EDT starts second Sunday at 2am
+  if (month === 3) {
+    const firstDay = new Date(year, 2, 1).getDay(); // 0=Sun
+    const secondSunday = firstDay === 0 ? 8 : 15 - firstDay;
+    return day >= secondSunday;
+  }
+
+  // November: EST starts first Sunday at 2am
+  const firstDay = new Date(year, 10, 1).getDay();
+  const firstSunday = firstDay === 0 ? 1 : 8 - firstDay;
+  return day < firstSunday;
 }
 
 // Generate all possible dedup keys for a concert (venue:date:identifier)
