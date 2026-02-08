@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# test output
+test-output.json
+
 # vercel
 .vercel
 
