@@ -12,6 +12,7 @@ export interface Concert {
   source_name: string;
   description: string | null;
   tags: string[]; // "free", "cheap", "student", "church", "chamber", etc.
+  ticket_url: string | null; // direct link to buy tickets
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +28,7 @@ export interface ExtractedConcert {
   program: string | null;
   performers: string | null;
   source_url: string | null;
+  ticket_url?: string | null; // direct link to buy tickets
   tags: string[];
 }
 

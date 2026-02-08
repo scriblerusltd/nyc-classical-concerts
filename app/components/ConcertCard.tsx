@@ -116,16 +116,28 @@ export default function ConcertCard({ concert }: { concert: Concert }) {
               </div>
             )}
 
-            {concert.source_url && sourceHostname && (
-              <a
-                href={concert.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto shrink-0 text-xs text-stone-400 transition-colors hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
-              >
-                {sourceHostname} &rarr;
-              </a>
-            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {concert.ticket_url && (
+                <a
+                  href={concert.ticket_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded bg-stone-900 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-stone-700 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-stone-300"
+                >
+                  Tickets
+                </a>
+              )}
+              {concert.source_url && sourceHostname && (
+                <a
+                  href={concert.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-stone-400 transition-colors hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-300"
+                >
+                  {sourceHostname} &rarr;
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>

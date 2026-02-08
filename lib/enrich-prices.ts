@@ -2,20 +2,21 @@ import * as cheerio from "cheerio";
 import { Concert } from "./types";
 
 /**
- * Fetch individual event detail pages to find actual ticket prices.
- * Currently supports Kaufman/Merkin Hall (JSON-LD structured data).
- * Runs after initial extraction on concerts with "See website" price.
+ * Enrich concerts with price and ticket data from venue detail pages.
+ * Currently supports Kaufman/Merkin Hall (JSON-LD structured data + ticket links).
+ * Runs after dedup on concerts with "See website" price or missing ticket URLs.
  */
 
 const CONCURRENCY = 5;
 const TIMEOUT_MS = 10000;
 
-interface PriceResult {
-  price: string;
-  price_cents: number | null;
+interface EnrichResult {
+  price?: string;
+  price_cents?: number | null;
+  ticket_url?: string;
 }
 
-async function fetchKaufmanPrice(url: string): Promise<PriceResult | null> {
+async function fetchKaufmanDetails(url: string): Promise<EnrichResult | null> {
   try {
     const response = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -29,8 +30,15 @@ async function fetchKaufmanPrice(url: string): Promise<PriceResult | null> {
 
     const html = await response.text();
     const $ = cheerio.load(html);
+    const result: EnrichResult = {};
 
-    // Try JSON-LD first (most reliable)
+    // Extract ticket URL
+    const ticketLink = $('a[href*="tickets.kaufmanmusiccenter.org"]').first().attr("href");
+    if (ticketLink) {
+      result.ticket_url = ticketLink;
+    }
+
+    // Try JSON-LD for price
     const jsonLd = $('script[type="application/ld+json"]').text();
     if (jsonLd) {
       try {
@@ -40,13 +48,15 @@ async function fetchKaufmanPrice(url: string): Promise<PriceResult | null> {
           const offer = Array.isArray(offers) ? offers[0] : offers;
           if (offer.price !== undefined) {
             const priceStr = String(offer.price);
-            // Handle "40/45" format (two tiers)
             const firstPrice = priceStr.split("/")[0];
             const cents = Math.round(parseFloat(firstPrice) * 100);
-            return {
-              price: `$${priceStr}`,
-              price_cents: isNaN(cents) ? null : cents,
-            };
+            result.price = `$${priceStr}`;
+            result.price_cents = isNaN(cents) ? null : cents;
+          }
+
+          // Also check for ticket URL in offers
+          if (!result.ticket_url && offer.url) {
+            result.ticket_url = offer.url;
           }
         }
       } catch {
@@ -54,31 +64,40 @@ async function fetchKaufmanPrice(url: string): Promise<PriceResult | null> {
       }
     }
 
-    // Fallback: ticket-bar element
-    const ticketBar = $(".ticket-bar span")
-      .filter((_, el) => $(el).text().includes("$"))
-      .first()
-      .text()
-      .trim();
+    // Fallback: ticket-bar element for price
+    if (!result.price) {
+      const ticketBar = $(".ticket-bar span")
+        .filter((_, el) => $(el).text().includes("$"))
+        .first()
+        .text()
+        .trim();
 
-    if (ticketBar) {
-      const match = ticketBar.match(/\$(\d+)/);
-      if (match) {
-        const cents = parseInt(match[1], 10) * 100;
-        return { price: ticketBar, price_cents: cents };
+      if (ticketBar) {
+        const match = ticketBar.match(/\$(\d+)/);
+        if (match) {
+          result.price = ticketBar;
+          result.price_cents = parseInt(match[1], 10) * 100;
+        }
       }
     }
 
     // Check for "free" indicators
-    const bodyText = $("body").text().toLowerCase();
-    if (
-      bodyText.includes("free admission") ||
-      bodyText.includes("free, no tickets") ||
-      bodyText.includes("free event")
-    ) {
-      return { price: "Free", price_cents: 0 };
+    if (!result.price) {
+      const bodyText = $("body").text().toLowerCase();
+      if (
+        bodyText.includes("free admission") ||
+        bodyText.includes("free, no tickets") ||
+        bodyText.includes("free event")
+      ) {
+        result.price = "Free";
+        result.price_cents = 0;
+      }
     }
 
+    // Only return if we found something useful
+    if (result.price || result.ticket_url) {
+      return result;
+    }
     return null;
   } catch {
     return null;
@@ -99,35 +118,36 @@ async function processInBatches<T, R>(
   return results;
 }
 
-export async function enrichPrices(concerts: Concert[]): Promise<Concert[]> {
-  // Find concerts that need price enrichment
-  const needsPrice = concerts.filter(
+export async function enrichConcerts(concerts: Concert[]): Promise<Concert[]> {
+  // Find concerts that need enrichment (price or ticket URL)
+  const needsEnrichment = concerts.filter(
     (c) =>
-      c.price === "See website" &&
       c.source_url &&
-      // Only enrich from sources where we know detail pages have prices
       (c.source_url.includes("kaufmanmusiccenter.org") ||
-        c.source_url.includes("msmnyc.edu"))
+        c.source_url.includes("msmnyc.edu")) &&
+      (c.price === "See website" || !c.ticket_url)
   );
 
-  if (needsPrice.length === 0) return concerts;
+  if (needsEnrichment.length === 0) return concerts;
 
-  console.log(`Enriching prices for ${needsPrice.length} concerts...`);
+  console.log(`Enriching ${needsEnrichment.length} concerts from detail pages...`);
 
-  const priceResults = await processInBatches(
-    needsPrice,
+  const enrichResults = await processInBatches(
+    needsEnrichment,
     async (concert) => {
-      let result: PriceResult | null = null;
+      let result: EnrichResult | null = null;
 
       if (concert.source_url?.includes("kaufmanmusiccenter.org")) {
-        result = await fetchKaufmanPrice(concert.source_url);
+        result = await fetchKaufmanDetails(concert.source_url);
       } else if (concert.source_url?.includes("msmnyc.edu")) {
-        // MSM detail pages sometimes have price info
-        result = await fetchKaufmanPrice(concert.source_url); // same HTML parsing works
+        result = await fetchKaufmanDetails(concert.source_url); // same HTML parsing works
       }
 
       if (result) {
-        console.log(`  ${concert.title}: ${result.price}`);
+        const parts = [];
+        if (result.price) parts.push(result.price);
+        if (result.ticket_url) parts.push("ticket link");
+        console.log(`  ${concert.title}: ${parts.join(", ")}`);
       }
 
       return { concertId: concert.id, result };
@@ -135,27 +155,38 @@ export async function enrichPrices(concerts: Concert[]): Promise<Concert[]> {
     CONCURRENCY
   );
 
-  // Apply prices
-  const priceMap = new Map(
-    priceResults
+  // Apply enrichment
+  const enrichMap = new Map(
+    enrichResults
       .filter((r) => r.result !== null)
       .map((r) => [r.concertId, r.result!])
   );
 
   return concerts.map((c) => {
-    const found = priceMap.get(c.id);
-    if (found) {
-      return {
-        ...c,
-        price: found.price,
-        price_cents: found.price_cents,
-        tags: found.price_cents === 0 && !c.tags.includes("free")
-          ? [...c.tags, "free"]
-          : found.price_cents !== null && found.price_cents <= 2000 && !c.tags.includes("cheap")
-            ? [...c.tags, "cheap"]
-            : c.tags,
-      };
+    const found = enrichMap.get(c.id);
+    if (!found) return c;
+
+    const updated = { ...c };
+
+    if (found.price && c.price === "See website") {
+      updated.price = found.price;
+      updated.price_cents = found.price_cents ?? null;
+
+      // Update tags based on price
+      if (found.price_cents === 0 && !c.tags.includes("free")) {
+        updated.tags = [...c.tags, "free"];
+      } else if (found.price_cents !== null && found.price_cents !== undefined && found.price_cents <= 2000 && !c.tags.includes("cheap")) {
+        updated.tags = [...c.tags, "cheap"];
+      }
     }
-    return c;
+
+    if (found.ticket_url && !c.ticket_url) {
+      updated.ticket_url = found.ticket_url;
+    }
+
+    return updated;
   });
 }
+
+// Keep old name as alias for backwards compatibility with cron route
+export const enrichPrices = enrichConcerts;
